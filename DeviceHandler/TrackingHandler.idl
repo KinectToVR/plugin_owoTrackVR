@@ -1,0 +1,63 @@
+namespace DeviceHandler
+{
+	struct Vector
+	{
+		Single X;
+		Single Y;
+		Single Z;
+	};
+
+	struct Quaternion
+	{
+		Single X;
+		Single Y;
+		Single Z;
+		Single W;
+	};
+
+	struct Pose
+	{
+		Vector Position;
+		Quaternion Orientation;
+	};
+
+	[default_interface]
+	runtimeclass TrackingHandler
+	{
+		TrackingHandler(); // Default constructor
+
+		void OnLoad(); // Prepare plugin for usage
+		void Update(); // Prepare stuff for update
+		void Signal(); // Send a haptic signal now
+
+		Int32 Initialize(); // Initialize owoTrack
+		Int32 Shutdown();   // Disconnect, cleanup
+
+		Int32 Port; // Connection port { get; set; }
+		String[] IP { get; }; // Machine's IP { get; }
+		Boolean IsInitialized { get; }; // Init { get; }
+		Int32 StatusResult { get; }; // Status { get; }
+
+		Boolean CalibratingForward; // FWD calibration flag
+		Boolean CalibratingDown;	// DWN calibration flag
+
+		Quaternion GlobalRotation; // VR HMD offset { get; set; }
+		Quaternion LocalRotation;  // Device offset { get; set; }
+
+		// Event handler: notify about any service
+		// operational status changes: typed event
+		event Windows.Foundation.EventHandler<String> StatusChanged;
+
+		// Event handler: log a stringized message
+		event Windows.Foundation.EventHandler<String> LogEvent;
+
+		// Get the caluclated pose (if valid)
+		Pose CalculatePose(
+			Pose headsetPose,
+			Single headsetYaw,
+			Vector globalOffset,
+			Vector deviceOffset,
+			Vector trackerOffset
+		);
+	}
+}
