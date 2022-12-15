@@ -236,7 +236,7 @@ public class OwoTrack : ITrackingDevice
                 sender.Value = Math.Clamp(sender.Value, 60, 90);
 
             TrackerHeightOffset = (uint)sender.Value; // Also save!
-            Host.PluginSettings["TrackerHeightOffset"] = TrackerOffset;
+            Host.PluginSettings["TrackerHeightOffset"] = TrackerHeightOffset;
         };
 
         CalibrateForwardButton.Click += CalibrateForwardButton_Click;
