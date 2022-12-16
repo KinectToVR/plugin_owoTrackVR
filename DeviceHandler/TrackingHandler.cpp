@@ -53,7 +53,8 @@ namespace winrt::DeviceHandler::implementation
 
 			if (!dataServer->isDataAvailable())
 			{
-				if (eRetries >= 180)
+				// 100/s => 5s timeout
+				if (eRetries >= 500)
 				{
 					eRetries = 0; // Reset
 					statusResult =

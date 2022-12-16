@@ -17,7 +17,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
-    <ClCompile Include="Class.cpp" />
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
     <ClCompile Include="vendor\owoTrackVR\basis.cpp">
       <Filter>Source Files</Filter>

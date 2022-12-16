@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
 using System.Linq;
 using System.Numerics;
@@ -56,7 +57,7 @@ public class OwoTrack : ITrackingDevice
     public bool IsSettingsDaemonSupported => true;
     public object SettingsInterfaceRoot => InterfaceRoot;
 
-    public List<TrackedJoint> TrackedJoints { get; } = new()
+    public ObservableCollection<TrackedJoint> TrackedJoints { get; } = new()
     {
         new TrackedJoint
         {
@@ -107,9 +108,9 @@ public class OwoTrack : ITrackingDevice
     public void OnLoad()
     {
         // Try to load calibration values from settings
-        TrackerHeightOffset = Host.PluginSettings.GetSetting<uint>("TrackerHeightOffset");
-        GlobalRotation = Host.PluginSettings.GetSetting<Quaternion>("GlobalRotation");
-        LocalRotation = Host.PluginSettings.GetSetting<Quaternion>("LocalRotation");
+        TrackerHeightOffset = Host.PluginSettings.GetSetting("TrackerHeightOffset", 75U);
+        GlobalRotation = Host.PluginSettings.GetSetting("GlobalRotation", Quaternion.Identity);
+        LocalRotation = Host.PluginSettings.GetSetting("LocalRotation", Quaternion.Identity);
 
         // Try to fix the recovered height offset value
         if (TrackerHeightOffset is < 60 or > 90) TrackerHeightOffset = 75;
@@ -232,11 +233,12 @@ public class OwoTrack : ITrackingDevice
         HipHeightNumberBox.ValueChanged += (sender, _) =>
         {
             // Try to fix the recovered height offset value
-            if (double.IsNaN(sender.Value) || sender.Value is < 60 or > 90)
+            if (double.IsNaN(sender.Value)) sender.Value = 75;
+            if (sender.Value is < 60 or > 90)
                 sender.Value = Math.Clamp(sender.Value, 60, 90);
 
             TrackerHeightOffset = (uint)sender.Value; // Also save!
-            Host.PluginSettings["TrackerHeightOffset"] = TrackerHeightOffset;
+            Host.PluginSettings.SetSetting("TrackerHeightOffset", TrackerHeightOffset);
         };
 
         CalibrateForwardButton.Click += CalibrateForwardButton_Click;
@@ -365,8 +367,8 @@ public class OwoTrack : ITrackingDevice
         GlobalRotation = Handler.GlobalRotation.ToNet();
         LocalRotation = Handler.LocalRotation.ToNet();
 
-        Host.PluginSettings["GlobalRotation"] = GlobalRotation;
-        Host.PluginSettings["LocalRotation"] = LocalRotation;
+        Host.PluginSettings.SetSetting("GlobalRotation", GlobalRotation);
+        Host.PluginSettings.SetSetting("LocalRotation", LocalRotation);
 
         // Update the UI
         UpdateSettingsInterface();
@@ -412,8 +414,8 @@ public class OwoTrack : ITrackingDevice
         GlobalRotation = Handler.GlobalRotation.ToNet();
         LocalRotation = Handler.LocalRotation.ToNet();
 
-        Host.PluginSettings["GlobalRotation"] = GlobalRotation;
-        Host.PluginSettings["LocalRotation"] = LocalRotation;
+        Host.PluginSettings.SetSetting("GlobalRotation", GlobalRotation);
+        Host.PluginSettings.SetSetting("LocalRotation", LocalRotation);
 
         // Update the UI
         UpdateSettingsInterface();
