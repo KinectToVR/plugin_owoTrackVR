@@ -2,10 +2,8 @@
 // Licensed under the MIT License. See LICENSE in the project root for license information.
 
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
-using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using System.Timers;
@@ -32,6 +30,22 @@ public class OwoTrack : ITrackingDevice
 {
     // Update settings UI
     private int _statusBackup = (int)HandlerStatus.ServiceNotStarted;
+
+    public OwoTrack()
+    {
+        // Set up a new server update timer
+        var timer = new Timer
+        {
+            Interval = 25, AutoReset = true, Enabled = true
+        };
+        timer.Elapsed += (_, _) =>
+        {
+            if (!PluginLoaded || !Handler.IsInitialized) return;
+            Handler.Update(); // Sanity check, refresh the sever
+        };
+        timer.Start(); // Start the timer
+    }
+
     [Import(typeof(IAmethystHost))] private IAmethystHost Host { get; set; }
 
     private TrackingHandler Handler { get; } = new();
@@ -75,6 +89,8 @@ public class OwoTrack : ITrackingDevice
         }
     }
 
+    public Uri ErrorDocsUri => new($"https://docs.k2vr.tech/{Host?.DocsLanguageCode ?? "en"}/owo/setup/");
+
     public bool IsInitialized => Handler.IsInitialized;
 
     public string DeviceStatusString => PluginLoaded
@@ -89,21 +105,6 @@ public class OwoTrack : ITrackingDevice
             _ => $"Undefined: {DeviceStatus}\nE_UNDEFINED\nSomething weird has happened, though we can't tell what."
         }
         : $"Undefined: {DeviceStatus}\nE_UNDEFINED\nSomething weird has happened, though we can't tell what.";
-
-    public OwoTrack()
-    {
-        // Set up a new server update timer
-        var timer = new Timer
-        {
-            Interval = 25, AutoReset = true, Enabled = true
-        };
-        timer.Elapsed += (_, _) =>
-        {
-            if (!PluginLoaded || !Handler.IsInitialized) return;
-            Handler.Update(); // Sanity check, refresh the sever
-        };
-        timer.Start(); // Start the timer
-    }
 
     public void OnLoad()
     {
@@ -190,7 +191,6 @@ public class OwoTrack : ITrackingDevice
         {
             Value = TrackerHeightOffset, Margin = new Thickness { Left = 5 },
             SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-            
         };
 
         InterfaceRoot = new Page
