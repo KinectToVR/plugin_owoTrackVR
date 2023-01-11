@@ -239,6 +239,7 @@ public class OwoTrack : ITrackingDevice
 
             TrackerHeightOffset = (uint)sender.Value; // Also save!
             Host.PluginSettings.SetSetting("TrackerHeightOffset", TrackerHeightOffset);
+            Host.PlayAppSound(SoundType.Invoke);
         };
 
         CalibrateForwardButton.Click += CalibrateForwardButton_Click;
@@ -340,6 +341,7 @@ public class OwoTrack : ITrackingDevice
         // Setup calibration UI
         CalibrationTextBlock.Visibility = Visibility.Visible;
         CalibrationTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Instructions/Forward");
+        Host.PlayAppSound(SoundType.CalibrationStart);
 
         // Wait as bit
         await Task.Delay(7000);
@@ -347,13 +349,17 @@ public class OwoTrack : ITrackingDevice
         {
             Handler.CalibratingForward = false;
             CalibrationTextBlock.Visibility = Visibility.Collapsed;
+            Host.PlayAppSound(SoundType.CalibrationAborted);
             return; // Sanity check, abort
         }
 
         // Begin calibration
         Handler.CalibratingForward = true;
         CalibrationTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Notices/Still");
+        Host.PlayAppSound(SoundType.CalibrationPointCaptured);
+
         await Task.Delay(4000); // Wait as bit
+        Host.PlayAppSound(SoundType.CalibrationComplete);
 
         // End calibration
         Handler.CalibratingForward = false;
@@ -387,6 +393,7 @@ public class OwoTrack : ITrackingDevice
         // Setup calibration UI
         CalibrationTextBlock.Visibility = Visibility.Visible;
         CalibrationTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Instructions/Down");
+        Host.PlayAppSound(SoundType.CalibrationStart);
 
         // Wait as bit
         await Task.Delay(7000);
@@ -394,13 +401,17 @@ public class OwoTrack : ITrackingDevice
         {
             Handler.CalibratingDown = false;
             CalibrationTextBlock.Visibility = Visibility.Collapsed;
+            Host.PlayAppSound(SoundType.CalibrationAborted);
             return; // Sanity check, abort
         }
 
         // Begin calibration
         Handler.CalibratingDown = true;
         CalibrationTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Notices/Still");
+        Host.PlayAppSound(SoundType.CalibrationPointCaptured);
+
         await Task.Delay(4000); // Wait as bit
+        Host.PlayAppSound(SoundType.CalibrationComplete);
 
         // End calibration
         Handler.CalibratingDown = false;
