@@ -25,6 +25,7 @@ namespace plugin_OwoTrack;
 [ExportMetadata("Name", "owoTrackVR")]
 [ExportMetadata("Guid", "K2VRTEAM-AME2-APII-DVCE-DVCEOWOTRACK")]
 [ExportMetadata("Publisher", "K2VR Team")]
+[ExportMetadata("Version", "1.0.0.0")]
 [ExportMetadata("Website", "https://github.com/KinectToVR/plugin_owoTrackVR")]
 public class OwoTrack : ITrackingDevice
 {

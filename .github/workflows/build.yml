@@ -45,4 +45,6 @@ jobs:
           automatic_release_tag: "latest"
           prerelease: true
           title: "plugin_owoTrackVR Build Artifact"
-          files: "plugin_owoTrackVR/bin/Release/net7.0/win10-x64/publish/plugin_owoTrackVR.zip"
+          files: |
+            ./plugin_owoTrackVR/bin/Release/net7.0/win10-x64/publish/plugin_owoTrackVR.zip
+            ./external/manifest.json
