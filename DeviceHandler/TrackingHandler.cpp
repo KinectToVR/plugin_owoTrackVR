@@ -15,14 +15,36 @@ namespace winrt::DeviceHandler::implementation
 
 	void TrackingHandler::OnLoad()
 	{
-		// Get the current internet connection profile
-		const auto& profile = Windows::Networking::Connectivity::NetworkInformation::GetInternetConnectionProfile();
+		[&, this]
+		{
+			__try
+			{
+				[&, this]
+				{
+					// Get the current internet connection profile
+					const auto& profile =
+						Windows::Networking::Connectivity::NetworkInformation::GetInternetConnectionProfile();
 
-		// Refresh all local host IP addresses
-		for (const auto& hostName : Windows::Networking::Connectivity::NetworkInformation::GetHostNames())
-			if (hostName.IPInformation() && hostName.IPInformation().NetworkAdapter() &&
-				hostName.IPInformation().NetworkAdapter().NetworkAdapterId() == profile.NetworkAdapter().NetworkAdapterId() &&
-				hostName.Type() == Windows::Networking::HostNameType::Ipv4) ipVector.push_back(hostName.CanonicalName());
+					// Refresh all local host IP addresses
+					for (const auto& hostName : Windows::Networking::Connectivity::NetworkInformation::GetHostNames())
+						if (hostName.IPInformation() && hostName.IPInformation().NetworkAdapter() &&
+							hostName.IPInformation().NetworkAdapter().NetworkAdapterId() == profile.NetworkAdapter().
+							NetworkAdapterId() &&
+							hostName.Type() == Windows::Networking::HostNameType::Ipv4)
+							ipVector.push_back(hostName.CanonicalName());
+				}();
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER)
+			{
+				[&, this]
+				{
+					Log(L"OWO Device Error: Startup failed, fatal SEH exception! ", 2);
+				}();
+			}
+		}();
+
+		// Add localhost if empty
+		if (ipVector.empty()) ipVector.push_back(L"127.0.0.1");
 	}
 
 	void TrackingHandler::Update()
