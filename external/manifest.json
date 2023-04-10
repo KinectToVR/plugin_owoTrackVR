@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0.0",
+  "version": "1.0.0.1",
   "display_name": "owoTrackVR",
-  "download":  "plugin_owoTrackVR.zip",
-  "changelog": "Added AppSounds on Settings UI actions.",
+  "download": "plugin_owoTrackVR.zip",
+  "changelog": "Haptic emitter now checks the phone's validity.",
   "guid": "K2VRTEAM-AME2-APII-DVCE-DVCEOWOTRACK"
 }

@@ -103,6 +103,7 @@ namespace winrt::DeviceHandler::implementation
 
 	void TrackingHandler::Signal() const
 	{
+		if (!initialized || statusResult != S_OK) return;
 		dataServer->buzz(0.7, 100.0, 0.5);
 	}
 
@@ -328,7 +329,7 @@ namespace winrt::DeviceHandler::implementation
 
 		p_remote_quaternion = p_remote_quaternion * Quat(localRotation);
 		pose.Orientation = p_remote_quaternion.toWinRT();
-		
+
 		// Angular velocity is not used as of now
 		// double* gyro = m_data_server->getGyroscope();
 
