@@ -6,7 +6,6 @@
     <TargetPlatformIdentifier>Windows</TargetPlatformIdentifier>
     <RootNamespace>plugin_OwoTrack</RootNamespace>
     <RuntimeIdentifiers>win10-x64</RuntimeIdentifiers>
-    <PublishTrimmed>true</PublishTrimmed>
     <Platforms>x64</Platforms>
     <Platform>x64</Platform>
     <UseWinUI>true</UseWinUI>
