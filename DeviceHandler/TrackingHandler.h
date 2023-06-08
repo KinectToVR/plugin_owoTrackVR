@@ -11,6 +11,7 @@
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "iphlpapi.lib")
 
+#include <future>
 #include <InfoServer.h>
 #include <PositionPredictor.h>
 #include <UDPDeviceQuatServer.h>
@@ -24,87 +25,92 @@
 
 namespace winrt::DeviceHandler::implementation
 {
-	struct TrackingHandler : TrackingHandlerT<TrackingHandler>
-	{
-		TrackingHandler() = default;
+    struct TrackingHandler : TrackingHandlerT<TrackingHandler>
+    {
+        TrackingHandler() = default;
 
-		void OnLoad();
-		void Update();
-		void Signal() const;
+        void OnLoad();
+        void Update();
+        void Signal() const;
 
-		int32_t Initialize();
-		int32_t Shutdown();
+        int32_t Initialize();
+        int32_t Shutdown();
 
-		int32_t Port() const;
-		void Port(int32_t value);
+        int32_t Port() const;
+        void Port(int32_t value);
 
-		com_array<hstring> IP() const;
-		bool IsInitialized() const;
-		int32_t StatusResult() const;
+        com_array<hstring> IP() const;
+        bool IsInitialized() const;
+        int32_t StatusResult() const;
 
-		bool CalibratingForward() const;
-		void CalibratingForward(bool value);
+        bool CalibratingForward() const;
+        void CalibratingForward(bool value);
 
-		bool CalibratingDown() const;
-		void CalibratingDown(bool value);
+        bool CalibratingDown() const;
+        void CalibratingDown(bool value);
 
-		Quaternion GlobalRotation() const;
-		void GlobalRotation(const Quaternion& value);
+        Quaternion GlobalRotation() const;
+        void GlobalRotation(const Quaternion& value);
 
-		Quaternion LocalRotation() const;
-		void LocalRotation(const Quaternion& value);
+        Quaternion LocalRotation() const;
+        void LocalRotation(const Quaternion& value);
 
-		event_token StatusChanged(const Windows::Foundation::EventHandler<hstring>& handler);
-		void StatusChanged(const event_token& token) noexcept;
+        event_token StatusChanged(const Windows::Foundation::EventHandler<hstring>& handler);
+        void StatusChanged(const event_token& token) noexcept;
 
-		event_token LogEvent(const Windows::Foundation::EventHandler<hstring>& handler);
-		void LogEvent(const event_token& token) noexcept;
+        event_token LogEvent(const Windows::Foundation::EventHandler<hstring>& handler);
+        void LogEvent(const event_token& token) noexcept;
 
-		Pose CalculatePose(
-			const Pose& headsetPose,
-			const float& headsetYaw,
-			const Vector& globalOffset,
-			const Vector& deviceOffset,
-			const Vector& trackerOffset);
+        Pose CalculatePose(
+            const Pose& headsetPose,
+            const float& headsetYaw,
+            const Vector& globalOffset,
+            const Vector& deviceOffset,
+            const Vector& trackerOffset);
 
-	private:
-		event<Windows::Foundation::EventHandler<hstring>> statusChangedEvent;
-		event<Windows::Foundation::EventHandler<hstring>> logEvent;
+    private:
+        event<Windows::Foundation::EventHandler<hstring>> statusChangedEvent;
+        event<Windows::Foundation::EventHandler<hstring>> logEvent;
 
-		std::function<void(std::wstring, int32_t)> Log = std::bind(
-			&TrackingHandler::LogMessage, this, std::placeholders::_1, std::placeholders::_2);
+        std::function<void(std::wstring, int32_t)> Log = std::bind(
+            &TrackingHandler::LogMessage, this, std::placeholders::_1, std::placeholders::_2);
 
-		bool initialized = false;
-		bool calibratingForward = false;
-		bool calibratingDown = false;
+        std::shared_ptr<std::future<void>> reloadThread;
 
-		uint32_t devicePort = 6969;
+        bool initialized = false;
+        bool calibratingForward = false;
+        bool calibratingDown = false;
 
-		std::vector<hstring> ipVector;
-		HRESULT statusResult = R_E_NOT_STARTED;
+        uint32_t devicePort = 6969;
 
-		UDPDeviceQuatServer* dataServer;
-		InfoServer* infoServer;
-		PositionPredictor posePredictor;
+        std::vector<hstring> ipVector;
+        HRESULT statusResult = R_E_NOT_STARTED;
 
-		Quaternion globalRotation{};
-		Quaternion localRotation{};
+        UDPDeviceQuatServer* dataServer;
+        InfoServer* infoServer;
+        PositionPredictor posePredictor;
 
-		// How many retries have been made before marking
-		// the connection dead (assume max 180 retries or 3 seconds)
-		int32_t eRetries = 0;
+        Quaternion globalRotation{};
+        Quaternion localRotation{};
 
-		// Message logging handler: bound to <Log>
-		void LogMessage(const std::wstring& message, const int32_t& severity)
-		{
-			logEvent(*this, std::format(L"[{}] ", severity) + message);
-		}
-	};
+        // How many retries have been made before marking
+        // the connection dead (assume max 180 retries or 3 seconds)
+        int32_t eRetries = 0;
+
+        // Delayed sending of refresh requests
+        void CallStatusChanged(const std::wstring& message, HRESULT status);
+
+        // Message logging handler: bound to <Log>
+        void LogMessage(const std::wstring& message, const int32_t& severity)
+        {
+            logEvent(*this, std::format(L"[{}] ", severity) + message);
+        }
+    };
 }
 
 namespace winrt::DeviceHandler::factory_implementation
 {
-	struct TrackingHandler : TrackingHandlerT<TrackingHandler, implementation::TrackingHandler>
-	{
-	};
+    struct TrackingHandler : TrackingHandlerT<TrackingHandler, implementation::TrackingHandler>
+    {
+    };
 }

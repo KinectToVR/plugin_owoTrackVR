@@ -1,350 +1,380 @@
 ﻿#include "pch.h"
 #include "TrackingHandler.h"
+
+#include <future>
+
 #include "TrackingHandler.g.cpp"
 
 namespace winrt::DeviceHandler::implementation
 {
-	// String to Wide String (The better one)
-	std::wstring StringToWString(const std::string& str)
-	{
-		const int count = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), nullptr, 0);
-		std::wstring w_str(count, 0);
-		MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), w_str.data(), count);
-		return w_str;
-	}
+    // String to Wide String (The better one)
+    std::wstring StringToWString(const std::string& str)
+    {
+        const int count = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), nullptr, 0);
+        std::wstring w_str(count, 0);
+        MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), w_str.data(), count);
+        return w_str;
+    }
 
-	void TrackingHandler::OnLoad()
-	{
-		[&, this]
-		{
-			__try
-			{
-				[&, this]
-				{
-					// Get the current internet connection profile
-					const auto& profile =
-						Windows::Networking::Connectivity::NetworkInformation::GetInternetConnectionProfile();
+    void TrackingHandler::OnLoad()
+    {
+        [&, this]
+        {
+            __try
+            {
+                [&, this]
+                {
+                    // Get the current internet connection profile
+                    const auto& profile =
+                        Windows::Networking::Connectivity::NetworkInformation::GetInternetConnectionProfile();
 
-					// Refresh all local host IP addresses
-					for (const auto& hostName : Windows::Networking::Connectivity::NetworkInformation::GetHostNames())
-						if (hostName.IPInformation() && hostName.IPInformation().NetworkAdapter() &&
-							hostName.IPInformation().NetworkAdapter().NetworkAdapterId() == profile.NetworkAdapter().
-							NetworkAdapterId() &&
-							hostName.Type() == Windows::Networking::HostNameType::Ipv4)
-							ipVector.push_back(hostName.CanonicalName());
-				}();
-			}
-			__except (EXCEPTION_EXECUTE_HANDLER)
-			{
-				[&, this]
-				{
-					Log(L"OWO Device Error: Startup failed, fatal SEH exception! ", 2);
-				}();
-			}
-		}();
+                    // Refresh all local host IP addresses
+                    for (const auto& hostName : Windows::Networking::Connectivity::NetworkInformation::GetHostNames())
+                        if (hostName.IPInformation() && hostName.IPInformation().NetworkAdapter() &&
+                            hostName.IPInformation().NetworkAdapter().NetworkAdapterId() == profile.NetworkAdapter().
+                            NetworkAdapterId() &&
+                            hostName.Type() == Windows::Networking::HostNameType::Ipv4)
+                            ipVector.push_back(hostName.CanonicalName());
+                }();
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER)
+            {
+                [&, this]
+                {
+                    Log(L"OWO Device Error: Startup failed, fatal SEH exception! ", 2);
+                }();
+            }
+        }();
 
-		// Add localhost if empty
-		if (ipVector.empty()) ipVector.push_back(L"127.0.0.1");
-	}
+        // Add localhost if empty
+        if (ipVector.empty()) ipVector.push_back(L"127.0.0.1");
+    }
 
-	void TrackingHandler::Update()
-	{
-		if (initialized)
-		{
-			/* Update the discovery server here */
-			try
-			{
-				infoServer->tick();
-			}
-			catch (std::system_error& e)
-			{
-				Log(L"OWO Device Error: Info server tick (heartbeat) failed!", 2);
-				Log(std::format(L"Error message: {}", to_hstring(e.what())), 2);
-			}
+    void TrackingHandler::Update()
+    {
+        if (initialized)
+        {
+            /* Update the discovery server here */
+            try
+            {
+                infoServer->tick();
+            }
+            catch (std::system_error& e)
+            {
+                Log(L"OWO Device Error: Info server tick (heartbeat) failed!", 2);
+                Log(std::format(L"Error message: {}", to_hstring(e.what())), 2);
+            }
 
-			/* Update the data server here */
-			try
-			{
-				dataServer->tick();
-			}
-			catch (std::system_error& e)
-			{
-				Log(L"OWO Device Error: Data listener tick (heartbeat) failed!", 2);
-				Log(std::format(L"Error message: {}", to_hstring(e.what())), 2);
-			}
+            /* Update the data server here */
+            try
+            {
+                dataServer->tick();
+            }
+            catch (std::system_error& e)
+            {
+                Log(L"OWO Device Error: Data listener tick (heartbeat) failed!", 2);
+                Log(std::format(L"Error message: {}", to_hstring(e.what())), 2);
+            }
 
-			if (!dataServer->isDataAvailable())
-			{
-				// 100/s => 5s timeout
-				if (eRetries >= 500)
-				{
-					eRetries = 0; // Reset
-					statusResult =
-						dataServer->isConnectionAlive()
-							? R_E_NO_DATA
-							: R_E_CON_DEAD;
+            if (!dataServer->isDataAvailable())
+            {
+                // 100/s => 1s timeout
+                if (eRetries >= 100)
+                {
+                    eRetries = 0; // Reset and backup that status
+                    const auto previousStatus = statusResult;
 
-					// Notify about the change
-					statusChangedEvent(*this, L"STATUS ERROR");
-				}
-				else eRetries++;
-			}
-			else
-			{
-				const auto previousStatus = statusResult;
-				statusResult = S_OK; // All fine now!
+                    statusResult =
+                        dataServer->isConnectionAlive()
+                            ? R_E_NO_DATA
+                            : R_E_CON_DEAD;
 
-				// If wasn't ok for some reason
-				if (previousStatus != S_OK)
-					statusChangedEvent(*this, L"STATUS OK");
-			}
-		}
-	}
+                    // Notify about the change
+                    if (statusResult != previousStatus && (reloadThread.get() == nullptr ||
+                        reloadThread.get() != nullptr && reloadThread->wait_for(
+                            std::chrono::milliseconds(0)) == std::future_status::ready))
+                        reloadThread = std::make_shared<std::future<void>>(
+                            std::async(std::launch::async, [this]
+                            {
+                                CallStatusChanged(L"STATUS ERROR", statusResult);
+                            }));
+                }
+                else eRetries++;
+            }
+            else
+            {
+                const auto previousStatus = statusResult;
+                statusResult = S_OK; // All fine now!
 
-	void TrackingHandler::Signal() const
-	{
-		if (!initialized || statusResult != S_OK) return;
-		dataServer->buzz(0.7, 100.0, 0.5);
-	}
+                // If wasn't ok for some reason and the status changed handler managed to finish its request
+                if (previousStatus != S_OK && (reloadThread.get() == nullptr || reloadThread.get() != nullptr &&
+                    reloadThread->wait_for(std::chrono::milliseconds(0)) == std::future_status::ready))
+                    statusChangedEvent(*this, L"STATUS OK");
+            }
+        }
+    }
 
-	int32_t TrackingHandler::Initialize()
-	{
-		// Optionally initialize the server
-		// (Warning: this can be done only once)
-		if (statusResult == R_E_NOT_STARTED)
-		{
-			// Construct the networking server
-			dataServer = new UDPDeviceQuatServer(&devicePort, Log);
+    void TrackingHandler::Signal() const
+    {
+        if (!initialized || statusResult != S_OK) return;
+        dataServer->buzz(0.7, 100.0, 0.5);
+    }
 
-			bool _return = false;
-			infoServer = new InfoServer(_return, Log);
+    int32_t TrackingHandler::Initialize()
+    {
+        // Optionally initialize the server
+        // (Warning: this can be done only once)
+        if (statusResult == R_E_NOT_STARTED)
+        {
+            // Construct the networking server
+            dataServer = new UDPDeviceQuatServer(&devicePort, Log);
 
-			if (!_return)
-			{
-				Log(L"OWO Device Error: Failed to bind ports!", 2);
-				statusResult = R_E_PORTS_TAKEN;
-				return R_E_PORTS_TAKEN; // Give up
-			}
+            bool _return = false;
+            infoServer = new InfoServer(_return, Log);
 
-			infoServer->set_port_no(dataServer->get_port());
-			infoServer->add_tracker();
+            if (!_return)
+            {
+                Log(L"OWO Device Error: Failed to bind ports!", 2);
+                statusResult = R_E_PORTS_TAKEN;
+                return R_E_PORTS_TAKEN; // Give up
+            }
 
-			// Start listening
-			try
-			{
-				dataServer->startListening(_return);
+            infoServer->set_port_no(dataServer->get_port());
+            infoServer->add_tracker();
 
-				if (!_return)
-				{
-					Log(L"OWO Device Error: Failed to bind ports!", 2);
-					statusResult = R_E_PORTS_TAKEN;
-					return R_E_PORTS_TAKEN; // Give up
-				}
+            // Start listening
+            try
+            {
+                dataServer->startListening(_return);
 
-				statusResult = R_E_CON_DEAD;
-			}
-			catch (std::system_error& e)
-			{
-				Log(L"OWO Device Error: Failed to start the data listener up!", 2);
-				Log(std::format(L"Error message: {}", to_hstring(e.what())), 2);
-				statusResult = R_E_INIT_FAILED;
-				return R_E_INIT_FAILED; // Give up
-			}
-		}
+                if (!_return)
+                {
+                    Log(L"OWO Device Error: Failed to bind ports!", 2);
+                    statusResult = R_E_PORTS_TAKEN;
+                    return R_E_PORTS_TAKEN; // Give up
+                }
 
-		// Mark the device as initialized
-		if (statusResult != R_E_INIT_FAILED &&
-			statusResult != R_E_PORTS_TAKEN)
-		{
-			initialized = true;
-			calibratingForward = false;
-			calibratingDown = false;
-			return S_OK; // All fine now!
-		}
+                statusResult = R_E_CON_DEAD;
+            }
+            catch (std::system_error& e)
+            {
+                Log(L"OWO Device Error: Failed to start the data listener up!", 2);
+                Log(std::format(L"Error message: {}", to_hstring(e.what())), 2);
+                statusResult = R_E_INIT_FAILED;
+                return R_E_INIT_FAILED; // Give up
+            }
+        }
 
-		return statusResult; // Unknown
-	}
+        // Mark the device as initialized
+        if (statusResult != R_E_INIT_FAILED &&
+            statusResult != R_E_PORTS_TAKEN)
+        {
+            initialized = true;
+            calibratingForward = false;
+            calibratingDown = false;
+            return S_OK; // All fine now!
+        }
 
-	int32_t TrackingHandler::Shutdown()
-	{
-		// Turn your device off here
-		initialized = false;
-		return 0; // Should be ok!
-	}
+        return statusResult; // Unknown
+    }
 
-	int32_t TrackingHandler::Port() const
-	{
-		return devicePort; // NOLINT(bugprone-narrowing-conversions, cppcoreguidelines-narrowing-conversions)
-	}
+    int32_t TrackingHandler::Shutdown()
+    {
+        // Turn your device off here
+        initialized = false;
+        return 0; // Should be ok!
+    }
 
-	void TrackingHandler::Port(int32_t value)
-	{
-		devicePort = value;
-	}
+    int32_t TrackingHandler::Port() const
+    {
+        return devicePort; // NOLINT(bugprone-narrowing-conversions, cppcoreguidelines-narrowing-conversions)
+    }
 
-	com_array<hstring> TrackingHandler::IP() const
-	{
-		return com_array(ipVector);
-	}
+    void TrackingHandler::Port(int32_t value)
+    {
+        devicePort = value;
+    }
 
-	bool TrackingHandler::IsInitialized() const
-	{
-		return initialized;
-	}
+    com_array<hstring> TrackingHandler::IP() const
+    {
+        return com_array(ipVector);
+    }
 
-	int32_t TrackingHandler::StatusResult() const
-	{
-		return statusResult;
-	}
+    bool TrackingHandler::IsInitialized() const
+    {
+        return initialized;
+    }
 
-	bool TrackingHandler::CalibratingForward() const
-	{
-		return calibratingForward;
-	}
+    int32_t TrackingHandler::StatusResult() const
+    {
+        return statusResult;
+    }
 
-	void TrackingHandler::CalibratingForward(bool value)
-	{
-		calibratingForward = value;
-	}
+    bool TrackingHandler::CalibratingForward() const
+    {
+        return calibratingForward;
+    }
 
-	bool TrackingHandler::CalibratingDown() const
-	{
-		return calibratingDown;
-	}
+    void TrackingHandler::CalibratingForward(bool value)
+    {
+        calibratingForward = value;
+    }
 
-	void TrackingHandler::CalibratingDown(bool value)
-	{
-		calibratingDown = value;
-	}
+    bool TrackingHandler::CalibratingDown() const
+    {
+        return calibratingDown;
+    }
 
-	Quaternion TrackingHandler::GlobalRotation() const
-	{
-		return globalRotation;
-	}
+    void TrackingHandler::CalibratingDown(bool value)
+    {
+        calibratingDown = value;
+    }
 
-	void TrackingHandler::GlobalRotation(const Quaternion& value)
-	{
-		globalRotation = value;
-	}
+    Quaternion TrackingHandler::GlobalRotation() const
+    {
+        return globalRotation;
+    }
 
-	Quaternion TrackingHandler::LocalRotation() const
-	{
-		return localRotation;
-	}
+    void TrackingHandler::GlobalRotation(const Quaternion& value)
+    {
+        globalRotation = value;
+    }
 
-	void TrackingHandler::LocalRotation(const Quaternion& value)
-	{
-		localRotation = value;
-	}
+    Quaternion TrackingHandler::LocalRotation() const
+    {
+        return localRotation;
+    }
 
-	event_token TrackingHandler::StatusChanged(
-		const Windows::Foundation::EventHandler<hstring>& handler)
-	{
-		return statusChangedEvent.add(handler);
-	}
+    void TrackingHandler::LocalRotation(const Quaternion& value)
+    {
+        localRotation = value;
+    }
 
-	void TrackingHandler::StatusChanged(const event_token& token) noexcept
-	{
-		statusChangedEvent.remove(token);
-	}
+    event_token TrackingHandler::StatusChanged(
+        const Windows::Foundation::EventHandler<hstring>& handler)
+    {
+        return statusChangedEvent.add(handler);
+    }
 
-	event_token TrackingHandler::LogEvent(
-		const Windows::Foundation::EventHandler<hstring>& handler)
-	{
-		return logEvent.add(handler);
-	}
+    void TrackingHandler::StatusChanged(const event_token& token) noexcept
+    {
+        statusChangedEvent.remove(token);
+    }
 
-	void TrackingHandler::LogEvent(const event_token& token) noexcept
-	{
-		logEvent.remove(token);
-	}
+    event_token TrackingHandler::LogEvent(
+        const Windows::Foundation::EventHandler<hstring>& handler)
+    {
+        return logEvent.add(handler);
+    }
 
-	Pose TrackingHandler::CalculatePose(
-		const Pose& headsetPose,
-		const float& headsetYaw,
-		const Vector& globalOffset,
-		const Vector& deviceOffset,
-		const Vector& trackerOffset)
-	{
-		// Make sure that we're running correctly
-		if (!initialized || statusResult != S_OK)
-			return {
-				Vector{0, 0, 0},
-				Quaternion{0, 0, 0, 1}
-			};
+    void TrackingHandler::LogEvent(const event_token& token) noexcept
+    {
+        logEvent.remove(token);
+    }
 
-		/* Prepare for the position calculations */
+    Pose TrackingHandler::CalculatePose(
+        const Pose& headsetPose,
+        const float& headsetYaw,
+        const Vector& globalOffset,
+        const Vector& deviceOffset,
+        const Vector& trackerOffset)
+    {
+        // Make sure that we're running correctly
+        if (!initialized || statusResult != S_OK)
+            return {
+                Vector{0, 0, 0},
+                Quaternion{0, 0, 0, 1}
+            };
 
-		Vector3 offset_global(globalOffset.X, globalOffset.Y, globalOffset.Z);
-		Vector3 offset_local_device(deviceOffset.X, deviceOffset.Y, deviceOffset.Z);
-		Vector3 offset_local_tracker(trackerOffset.X, trackerOffset.Y, trackerOffset.Z);
+        /* Prepare for the position calculations */
 
-		Pose pose{
-			.Position = Vector(
-				headsetPose.Position.X,
-				headsetPose.Position.Y,
-				headsetPose.Position.Z
-			)
-		}; // Zero the position vector
+        Vector3 offset_global(globalOffset.X, globalOffset.Y, globalOffset.Z);
+        Vector3 offset_local_device(deviceOffset.X, deviceOffset.Y, deviceOffset.Z);
+        Vector3 offset_local_tracker(trackerOffset.X, trackerOffset.Y, trackerOffset.Z);
 
-		const Basis offset_basis({
-			headsetPose.Orientation.X,
-			headsetPose.Orientation.Y,
-			headsetPose.Orientation.Z,
-			headsetPose.Orientation.W
-		});
+        Pose pose{
+            .Position = Vector(
+                headsetPose.Position.X,
+                headsetPose.Position.Y,
+                headsetPose.Position.Z
+            )
+        }; // Zero the position vector
 
-		/* Parse and calculate the positions */
+        const Basis offset_basis({
+            headsetPose.Orientation.X,
+            headsetPose.Orientation.Y,
+            headsetPose.Orientation.Z,
+            headsetPose.Orientation.W
+        });
 
-		// Acceleration is not used as of now
-		// double* acceleration = m_data_server->getAccel();
+        /* Parse and calculate the positions */
 
-		const double* p_remote_rotation = dataServer->getRotationQuaternion();
+        // Acceleration is not used as of now
+        // double* acceleration = m_data_server->getAccel();
 
-		auto p_remote_quaternion = Quat(
-			p_remote_rotation[0], p_remote_rotation[1],
-			p_remote_rotation[2], p_remote_rotation[3]);
+        const double* p_remote_rotation = dataServer->getRotationQuaternion();
 
-		p_remote_quaternion =
-			Quat(Vector3(1, 0, 0), -Math_PI / 2.0) * p_remote_quaternion;
+        auto p_remote_quaternion = Quat(
+            p_remote_rotation[0], p_remote_rotation[1],
+            p_remote_rotation[2], p_remote_rotation[3]);
 
-		if (calibratingForward)
-		{
-			globalRotation = Quat(Vector3(
-				0, get_yaw(p_remote_quaternion) -
-				get_yaw(offset_basis, Vector3(0, 0, -1)), 0)).toWinRT();
+        p_remote_quaternion =
+            Quat(Vector3(1, 0, 0), -Math_PI / 2.0) * p_remote_quaternion;
 
-			offset_global = (offset_basis.xform(Vector3(0, 0, -1)) *
-				Vector3(1, 0, 1)).normalized() + Vector3(0, 0.2, 0);
-			offset_local_device = Vector3(0, 0, 0);
-			offset_local_tracker = Vector3(0, 0, 0);
-		}
+        if (calibratingForward)
+        {
+            globalRotation = Quat(Vector3(
+                0, get_yaw(p_remote_quaternion) -
+                get_yaw(offset_basis, Vector3(0, 0, -1)), 0)).toWinRT();
 
-		p_remote_quaternion = Quat(globalRotation) * p_remote_quaternion;
+            offset_global = (offset_basis.xform(Vector3(0, 0, -1)) *
+                Vector3(1, 0, 1)).normalized() + Vector3(0, 0.2, 0);
+            offset_local_device = Vector3(0, 0, 0);
+            offset_local_tracker = Vector3(0, 0, 0);
+        }
 
-		if (calibratingDown)
-			localRotation =
-			(Quat(p_remote_quaternion.inverse().get_euler_yxz()) *
-				Quat(Vector3(0, 1, 0), -headsetYaw)).toWinRT();
+        p_remote_quaternion = Quat(globalRotation) * p_remote_quaternion;
 
-		p_remote_quaternion = p_remote_quaternion * Quat(localRotation);
-		pose.Orientation = p_remote_quaternion.toWinRT();
+        if (calibratingDown)
+            localRotation =
+            (Quat(p_remote_quaternion.inverse().get_euler_yxz()) *
+                Quat(Vector3(0, 1, 0), -headsetYaw)).toWinRT();
 
-		// Angular velocity is not used as of now
-		// double* gyro = m_data_server->getGyroscope();
+        p_remote_quaternion = p_remote_quaternion * Quat(localRotation);
+        pose.Orientation = p_remote_quaternion.toWinRT();
 
-		const auto final_tracker_basis = Basis(p_remote_quaternion);
-		pose.Position.X += static_cast<float>(offset_global.get_axis(0) +
-			offset_basis.xform(offset_local_device).get_axis(0) +
-			final_tracker_basis.xform(offset_local_tracker).get_axis(0));
-		pose.Position.Y += static_cast<float>(offset_global.get_axis(1) +
-			offset_basis.xform(offset_local_device).get_axis(1) +
-			final_tracker_basis.xform(offset_local_tracker).get_axis(1));
-		pose.Position.Z += static_cast<float>(offset_global.get_axis(2) +
-			offset_basis.xform(offset_local_device).get_axis(2) +
-			final_tracker_basis.xform(offset_local_tracker).get_axis(2));
+        // Angular velocity is not used as of now
+        // double* gyro = m_data_server->getGyroscope();
 
-		// Return our results
-		return pose;
-	}
+        const auto final_tracker_basis = Basis(p_remote_quaternion);
+        pose.Position.X += static_cast<float>(offset_global.get_axis(0) +
+            offset_basis.xform(offset_local_device).get_axis(0) +
+            final_tracker_basis.xform(offset_local_tracker).get_axis(0));
+        pose.Position.Y += static_cast<float>(offset_global.get_axis(1) +
+            offset_basis.xform(offset_local_device).get_axis(1) +
+            final_tracker_basis.xform(offset_local_tracker).get_axis(1));
+        pose.Position.Z += static_cast<float>(offset_global.get_axis(2) +
+            offset_basis.xform(offset_local_device).get_axis(2) +
+            final_tracker_basis.xform(offset_local_tracker).get_axis(2));
+
+        // Return our results
+        return pose;
+    }
+
+    void TrackingHandler::CallStatusChanged(const std::wstring& message, HRESULT status)
+    {
+        // Wait 1s in 100ms intervals for a possible abort
+        for (auto i = 0; i < 10; i++)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (statusResult != status)
+            {
+                Log(L"Not calling statusChangedEvent as the status has already changed!", 0);
+                return; // Abort if already changed while waiting for the refresh
+            }
+        }
+
+        // If we're still here, call the handler
+        statusChangedEvent(*this, message);
+    }
 }
