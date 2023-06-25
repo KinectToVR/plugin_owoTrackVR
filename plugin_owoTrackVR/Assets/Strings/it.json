@@ -1,0 +1,77 @@
+{
+  "language": "it",
+  "messages": [
+    {
+      "id": "/Plugins/OWO/Statuses/Success",
+      "translation": "Successo!\nS_OK\nVa tutto bene!"
+    },
+    {
+      "id": "/Plugins/OWO/Statuses/ConnectionDead",
+      "translation": "Errore di connessione!\nE_CONNECTION_DEAD\nControllare se l'app owoTrackVR sia in esecuzione, funzionante e connessa."
+    },
+    {
+      "id": "/Plugins/OWO/Statuses/NoData",
+      "translation": "Errore di connessione!\nE_NO_DATA\nControllare se l'app owoTrackVR sia in esecuzione, funzionante e connessa."
+    },
+    {
+      "id": "/Plugins/OWO/Statuses/InitFailure",
+      "translation": "Errore avvio del ricevitore!\nE_INIT_FAILED\nIl server non è riuscito ad avviarsi, controllare i log e il numero della porta."
+    },
+    {
+      "id": "/Plugins/OWO/Statuses/NoPorts",
+      "translation": "Errore configurazione porte!\nE_PORTS_TAKEN\nLa porta non è disponibile! (Chiudere le altre app relative ad owoTrack)"
+    },
+    {
+      "id": "/Plugins/OWO/Statuses/NotStarted",
+      "translation": "Errore di connessione!\nE_NOT_STARTED\nPremere il bottone 'Ricarica' per avviare il server di ricezione."
+    },
+    {
+      "id": "/Plugins/OWO/Settings/Labels/LocalIP/One",
+      "translation": "Il tuo IP Locale:"
+    },
+    {
+      "id": "/Plugins/OWO/Settings/Labels/LocalIP/Multiple",
+      "translation": "Il tuo IP Locale: (Uno di)"
+    },
+    {
+      "id": "/Plugins/OWO/Settings/Labels/Port",
+      "translation": "Porta di Connessione:"
+    },
+    {
+      "id": "/Plugins/OWO/Settings/Labels/HipHeight",
+      "translation": "Altezza Busto:"
+    },
+    {
+      "id": "/Plugins/OWO/Settings/Notices/NotStarted",
+      "translation": "Per favore prima avviare il server!"
+    },
+    {
+      "id": "/Plugins/OWO/Settings/Notices/NotConnected",
+      "translation": "Per favore connettere il cellulare!"
+    },
+    {
+      "id": "/Plugins/OWO/Settings/Notices/Still",
+      "translation": "Rimani così per un attimo..."
+    },
+    {
+      "id": "/Plugins/OWO/Settings/Notices/Failure",
+      "translation": "Il server non è riuscito ad avviarsi!"
+    },
+    {
+      "id": "/Plugins/OWO/Settings/Instructions/Forward",
+      "translation": "Tieni il tuo cellulare verso la stessa direzione\ndel tuo visore VR con lo schermo rivolto verso l'alto..."
+    },
+    {
+      "id": "/Plugins/OWO/Settings/Instructions/Down",
+      "translation": "Metti il cellulare sul tuo busto ora,\nrimani dritto in piedi in una posizone naturale..."
+    },
+    {
+      "id": "/Plugins/OWO/Settings/Buttons/Calibration/Forward",
+      "translation": "Calibra Davanti"
+    },
+    {
+      "id": "/Plugins/OWO/Settings/Buttons/Calibration/Down",
+      "translation": "Calibra Sotto"
+    }
+  ]
+}
