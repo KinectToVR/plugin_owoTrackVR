@@ -12,6 +12,8 @@ using DeviceHandler;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Markup;
+using Microsoft.UI.Xaml.Media;
 using DQuaternion = DeviceHandler.Quaternion;
 using DVector = DeviceHandler.Vector;
 using Quaternion = System.Numerics.Quaternion;
@@ -27,6 +29,8 @@ namespace plugin_OwoTrack;
 [ExportMetadata("Publisher", "K2VR Team")]
 [ExportMetadata("Version", "1.0.0.1")]
 [ExportMetadata("Website", "https://github.com/KinectToVR/plugin_owoTrackVR")]
+[ExportMetadata("DependencyLink", "https://docs.k2vr.tech/{0}/owo/about/")]
+[ExportMetadata("CoreSetupData", typeof(SetupData))]
 public class OwoTrack : ITrackingDevice
 {
     // Update settings UI
@@ -543,4 +547,16 @@ internal static class ProjectionExtensions
     {
         return new Quaternion(quaternion.X, quaternion.Y, quaternion.Z, quaternion.W);
     }
+}
+
+internal class SetupData : ICoreSetupData
+{
+    public object PluginIcon => new PathIcon
+    {
+        Data = (Geometry)XamlBindingHelper.ConvertValue(typeof(Geometry),
+            "M34.86,0A34.76,34.76,0,1,0,69.51,34.9,34.74,34.74,0,0,0,34.86,0ZM14.33,18.66A25.12,25.12,0,0,1,29.22,9.31c1.81-.39,3.68-.53,5-.7a28.81,28.81,0,0,1,11,2.27,1.45,1.45,0,0,1,1,1.45q.3,4.06.75,8.11c.09.79-.21.82-.79.69-.36-.08-.72-.16-1.08-.26-2-.59-1.88-.22-1.82-2.46,0-1.38-.42-1.79-1.73-1.64s-2.87.17-4.3.34c-.28,0-.59.43-.76.72a1.43,1.43,0,0,0,0,.8c.12,1.07-.07,1.62-1.41,1.84a31.91,31.91,0,0,0-16.08,7.77c-.56.48-.86.48-1.18-.2-1.22-2.62-2.5-5.21-3.67-7.85A1.86,1.86,0,0,1,14.33,18.66ZM24.91,58.73l-.09-.14h-.05v0c-2.26-.16-3.92-1.62-5.56-2.89A25.59,25.59,0,0,1,8.92,38.08a27.88,27.88,0,0,1,.87-10.71c.39.68.71,1.18,1,1.71q7,14.51,14,29a1.27,1.27,0,0,1,.05.44h0l0,0,.09,0S24.91,58.7,24.91,58.73Zm21.17-.43a29.5,29.5,0,0,1-8.72,2.43c-.18,0-.66-.57-.65-.86,0-1.86.16-3.72.28-5.58s.28-3.82.43-5.73c.1-1.25.22-2.5.34-4a4.44,4.44,0,0,1,.75.64c2.65,3.87,5.27,7.76,8,11.6C47,57.61,47,57.89,46.08,58.3Zm2.79-9.88C45.58,43.62,42.25,38.85,39,34c-.8-1.2-1.55-1.74-3-1.06a13.43,13.43,0,0,1-2.29.67c-2.05.56-2.14.68-2.27,2.76Q31,44.77,30.45,53.13a5.59,5.59,0,0,1-.29.83l-4.82-10c-1.32-2.75-2.58-5.52-4-8.23a1.65,1.65,0,0,1,.45-2.32,27.53,27.53,0,0,1,14-7.25c.83-.16,1.23.05,1.14.95,0,.32,0,.64,0,1,0,1.08.12,1.69,1.54,1.34a18.06,18.06,0,0,1,4.29-.32c.94,0,1.06-.46,1-1.2-.18-1.24.42-1.31,1.42-1,2.29.66,2.45.86,2.67,4.06.25,3.62.48,7.23.77,10.84.18,2.2.46,4.4.69,6.59Zm7.59.79-.4-.09Q54.69,33,53.31,16.94c2.24,1,5.91,7.4,6.84,11.78A26.07,26.07,0,0,1,56.46,49.21Z")
+    };
+
+    public string GroupName => string.Empty;
+    public Type PluginType => typeof(ITrackingDevice);
 }
