@@ -28,14 +28,14 @@ jobs:
       - name: Prepare WinRT projection files
         run: |
           nuget restore
-          msbuild DeviceHandler /restore /p:Platform=x64 /p:PlatformTarget=x64 /p:Configuration=Release /p:RuntimeIdentifier=win10-x64 /t:Rebuild
+          msbuild DeviceHandler /restore /p:Platform=x64 /p:PlatformTarget=x64 /p:Configuration=Release /p:RuntimeIdentifier=win-x64 /t:Rebuild
         
       - name: Restore and build (publish)
-        run: msbuild plugin_owoTrackVR /restore /p:Platform=x64 /p:PlatformTarget=x64 /p:Configuration=Release /p:RuntimeIdentifier=win10-x64 /t:Publish /p:PublishProfile=plugin_owoTrackVR\Properties\PublishProfiles\FolderProfile.pubxml
+        run: msbuild plugin_owoTrackVR /restore /p:Platform=x64 /p:PlatformTarget=x64 /p:Configuration=Release /p:RuntimeIdentifier=win-x64 /t:Publish /p:PublishProfile=plugin_owoTrackVR\Properties\PublishProfiles\FolderProfile.pubxml
         
       - name: Pack published files
         run: |
-          cd plugin_owoTrackVR/bin/Release/net7.0/win10-x64/publish
+          cd plugin_owoTrackVR/bin/Release/net8.0/win-x64/publish
           7z a plugin_owoTrackVR.zip *
         
       - name: Upload plugin artifact
@@ -46,5 +46,5 @@ jobs:
           prerelease: true
           title: "plugin_owoTrackVR Build Artifact"
           files: |
-            ./plugin_owoTrackVR/bin/Release/net7.0/win10-x64/publish/plugin_owoTrackVR.zip
+            ./plugin_owoTrackVR/bin/Release/net8.0/win-x64/publish/plugin_owoTrackVR.zip
             ./external/manifest.json
