@@ -1,25 +1,16 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License. See LICENSE in the project root for license information.
-
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
+using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using System.Timers;
 using Amethyst.Plugins.Contract;
-using DeviceHandler;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
-using DQuaternion = DeviceHandler.Quaternion;
-using DVector = DeviceHandler.Vector;
-using Quaternion = System.Numerics.Quaternion;
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
 
 namespace plugin_OwoTrack;
 
@@ -34,7 +25,7 @@ namespace plugin_OwoTrack;
 public class OwoTrack : ITrackingDevice
 {
     // Update settings UI
-    private int _statusBackup = (int)HandlerStatus.ServiceNotStarted;
+    private Handler.ConnectionStatus _statusBackup = Handler.ConnectionStatus.NotStarted;
 
     public OwoTrack()
     {
@@ -53,7 +44,7 @@ public class OwoTrack : ITrackingDevice
 
     [Import(typeof(IAmethystHost))] private IAmethystHost Host { get; set; }
 
-    private TrackingHandler Handler { get; } = new();
+    private Handler Handler { get; } = new(null);
     private bool CalibrationPending { get; set; }
 
     private Vector3 GlobalOffset { get; } = Vector3.Zero;
@@ -76,21 +67,21 @@ public class OwoTrack : ITrackingDevice
     public bool IsSettingsDaemonSupported => true;
     public object SettingsInterfaceRoot => InterfaceRoot;
 
-    public ObservableCollection<TrackedJoint> TrackedJoints { get; } = new()
-    {
-        new TrackedJoint
+    public ObservableCollection<TrackedJoint> TrackedJoints { get; } =
+    [
+        new()
         {
-            Name = TrackedJointType.JointSpineWaist.ToString(),
+            Name = nameof(TrackedJointType.JointSpineWaist),
             Role = TrackedJointType.JointSpineWaist
         }
-    };
+    ];
 
     public int DeviceStatus
     {
         get
         {
             UpdateSettingsInterface();
-            return Handler.StatusResult;
+            return (int)Handler.Status;
         }
     }
 
@@ -101,12 +92,12 @@ public class OwoTrack : ITrackingDevice
     public string DeviceStatusString => PluginLoaded
         ? DeviceStatus switch
         {
-            (int)HandlerStatus.ServiceNotStarted => Host.RequestLocalizedString("/Plugins/OWO/Statuses/NotStarted"),
-            (int)HandlerStatus.ServiceSuccess => Host.RequestLocalizedString("/Plugins/OWO/Statuses/Success"),
-            (int)HandlerStatus.ConnectionDead => Host.RequestLocalizedString("/Plugins/OWO/Statuses/ConnectionDead"),
-            (int)HandlerStatus.ErrorNoData => Host.RequestLocalizedString("/Plugins/OWO/Statuses/NoData"),
-            (int)HandlerStatus.ErrorInitFailed => Host.RequestLocalizedString("/Plugins/OWO/Statuses/InitFailure"),
-            (int)HandlerStatus.ErrorPortsTaken => Host.RequestLocalizedString("/Plugins/OWO/Statuses/NoPorts"),
+            (int)Handler.ConnectionStatus.NotStarted => Host.RequestLocalizedString("/Plugins/OWO/Statuses/NotStarted"),
+            (int)Handler.ConnectionStatus.Ok => Host.RequestLocalizedString("/Plugins/OWO/Statuses/Success"),
+            (int)Handler.ConnectionStatus.ConnectionDead => Host.RequestLocalizedString("/Plugins/OWO/Statuses/ConnectionDead"),
+            (int)Handler.ConnectionStatus.NoData => Host.RequestLocalizedString("/Plugins/OWO/Statuses/NoData"),
+            (int)Handler.ConnectionStatus.InitFailed => Host.RequestLocalizedString("/Plugins/OWO/Statuses/InitFailure"),
+            (int)Handler.ConnectionStatus.PortsTaken => Host.RequestLocalizedString("/Plugins/OWO/Statuses/NoPorts"),
             _ => $"Undefined: {DeviceStatus}\nE_UNDEFINED\nSomething weird has happened, though we can't tell what."
         }
         : $"Undefined: {DeviceStatus}\nE_UNDEFINED\nSomething weird has happened, though we can't tell what.";
@@ -129,12 +120,10 @@ public class OwoTrack : ITrackingDevice
         // Re-register native action handlers
         Handler.StatusChanged -= StatusChangedEventHandler;
         Handler.StatusChanged += StatusChangedEventHandler;
-        Handler.LogEvent -= LogMessageEventHandler;
-        Handler.LogEvent += LogMessageEventHandler;
 
         // Copy the ret values to the handler
-        Handler.GlobalRotation = GlobalRotation.ToWin();
-        Handler.LocalRotation = LocalRotation.ToWin();
+        Handler.GlobalRotation = GlobalRotation;
+        Handler.LocalRotation = LocalRotation;
 
         // Tell the handler to initialize
         if (!PluginLoaded) Handler.OnLoad();
@@ -142,14 +131,14 @@ public class OwoTrack : ITrackingDevice
         // Settings UI setup
         IpTextBlock = new TextBlock
         {
-            Text = Handler.IP.Length > 1 // Format as list if found multiple IPs!
-                ? $"[ {string.Join(", ", Handler.IP)} ]" // Or show a placeholder
-                : Handler.IP.GetValue(0)?.ToString() ?? "127.0.0.1",
+            Text = Handler.Addresses.Count > 1 // Format as list if found multiple IPs!
+                ? $"[ {string.Join(", ", Handler.Addresses)} ]" // Or show a placeholder
+                : Handler.Addresses.ElementAtOrDefault(0) ?? "127.0.0.1",
             Margin = new Thickness { Left = 5, Top = 3, Right = 3, Bottom = 3 }
         };
         IpLabelTextBlock = new TextBlock
         {
-            Text = Host.RequestLocalizedString(Handler.IP.Length > 1
+            Text = Host.RequestLocalizedString(Handler.Addresses.Count > 1
                 ? "/Plugins/OWO/Settings/Labels/LocalIP/Multiple"
                 : "/Plugins/OWO/Settings/Labels/LocalIP/One"),
             Margin = new Thickness(3), Opacity = 0.5
@@ -259,29 +248,29 @@ public class OwoTrack : ITrackingDevice
     {
         switch (Handler.Initialize())
         {
-            case (int)HandlerStatus.ServiceNotStarted:
+            case Handler.ConnectionStatus.NotStarted:
                 Host.Log(
-                    $"Couldn't initialize the owoTrackVR device handler! Status: {HandlerStatus.ServiceNotStarted}",
+                    $"Couldn't initialize the owoTrackVR device handler! Status: {Handler.Status}",
                     LogSeverity.Warning);
                 break;
-            case (int)HandlerStatus.ServiceSuccess:
+            case Handler.ConnectionStatus.Ok:
                 Host.Log(
-                    $"Successfully initialized the owoTrackVR device handler! Status: {HandlerStatus.ServiceSuccess}");
+                    $"Successfully initialized the owoTrackVR device handler! Status: {Handler.Status}");
                 break;
-            case (int)HandlerStatus.ConnectionDead:
-                Host.Log($"Couldn't initialize the owoTrackVR device handler! Status: {HandlerStatus.ConnectionDead}",
+            case Handler.ConnectionStatus.ConnectionDead:
+                Host.Log($"Couldn't initialize the owoTrackVR device handler! Status: {Handler.Status}",
                     LogSeverity.Warning);
                 break;
-            case (int)HandlerStatus.ErrorNoData:
-                Host.Log($"Couldn't initialize the owoTrackVR device handler! Status: {HandlerStatus.ErrorNoData}",
+            case Handler.ConnectionStatus.NoData:
+                Host.Log($"Couldn't initialize the owoTrackVR device handler! Status: {Handler.Status}",
                     LogSeverity.Warning);
                 break;
-            case (int)HandlerStatus.ErrorInitFailed:
-                Host.Log($"Couldn't initialize the owoTrackVR device handler! Status: {HandlerStatus.ErrorInitFailed}",
+            case Handler.ConnectionStatus.InitFailed:
+                Host.Log($"Couldn't initialize the owoTrackVR device handler! Status: {Handler.Status}",
                     LogSeverity.Error);
                 break;
-            case (int)HandlerStatus.ErrorPortsTaken:
-                Host.Log($"Couldn't initialize the owoTrackVR device handler! Status: {HandlerStatus.ErrorPortsTaken}",
+            case Handler.ConnectionStatus.PortsTaken:
+                Host.Log($"Couldn't initialize the owoTrackVR device handler! Status: {Handler.Status}",
                     LogSeverity.Fatal);
                 break;
         }
@@ -292,39 +281,31 @@ public class OwoTrack : ITrackingDevice
 
     public void Shutdown()
     {
-        switch (Handler.Shutdown())
-        {
-            case 0:
-                Host.Log($"Tried to shutdown the owoTrackVR device handler with status: {Handler.StatusResult}");
-                break;
-            default:
-                Host.Log("Tried to shutdown the owoTrackVR device handler, exception occurred!", LogSeverity.Error);
-                break;
-        }
+        Handler.Shutdown();
+        Host.Log($"Tried to shutdown the owoTrackVR device handler with status: {Handler.Status}");
     }
 
     public void Update()
     {
         // That's all if the server is failing!
         if (!PluginLoaded || !Handler.IsInitialized ||
-            Handler.StatusResult != (int)HandlerStatus.ServiceSuccess) return;
+            Handler.Status is not Handler.ConnectionStatus.Ok) return;
 
         // Get the computed pose
         var pose = Handler.CalculatePose(
-            new Pose
-            {
-                Position = Host.HmdPose.Position.ToWin(),
-                Orientation = Host.HmdPose.Orientation.ToWin()
-            },
-            (float)Host.HmdOrientationYaw,
-            GlobalOffset.ToWin(),
-            DeviceOffset.ToWin(),
-            TrackerOffset.ToWin()
+            (
+                Host.HmdPose.Position,
+                Host.HmdPose.Orientation,
+                (float)Host.HmdOrientationYaw
+            ),
+            GlobalOffset,
+            DeviceOffset,
+            TrackerOffset
         );
 
         // Update our tracker's pose
-        TrackedJoints[0].Position = pose.Position.ToNet();
-        TrackedJoints[0].Orientation = pose.Orientation.ToNet();
+        TrackedJoints[0].Position = pose.Position;
+        TrackedJoints[0].Orientation = pose.Orientation;
     }
 
     public void SignalJoint(int jointId)
@@ -336,105 +317,119 @@ public class OwoTrack : ITrackingDevice
     // "Full Calibration"
     private async void CalibrateForwardButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!Handler.IsInitialized || CalibrationPending) return; // Sanity check
-
-        // Block next clicks
-        CalibrateForwardButton.IsEnabled = false;
-        CalibrateDownButton.IsEnabled = false;
-        CalibrationPending = true;
-
-        // Setup calibration UI
-        CalibrationTextBlock.Visibility = Visibility.Visible;
-        CalibrationTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Instructions/Forward");
-        Host.PlayAppSound(SoundType.CalibrationStart);
-
-        // Wait as bit
-        await Task.Delay(7000);
-        if (!Handler.IsInitialized)
+        try
         {
+            if (!Handler.IsInitialized || CalibrationPending) return; // Sanity check
+
+            // Block next clicks
+            CalibrateForwardButton.IsEnabled = false;
+            CalibrateDownButton.IsEnabled = false;
+            CalibrationPending = true;
+
+            // Setup calibration UI
+            CalibrationTextBlock.Visibility = Visibility.Visible;
+            CalibrationTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Instructions/Forward");
+            Host.PlayAppSound(SoundType.CalibrationStart);
+
+            // Wait as bit
+            await Task.Delay(7000);
+            if (!Handler.IsInitialized)
+            {
+                Handler.CalibratingForward = false;
+                CalibrationTextBlock.Visibility = Visibility.Collapsed;
+                Host.PlayAppSound(SoundType.CalibrationAborted);
+                return; // Sanity check, abort
+            }
+
+            // Begin calibration
+            Handler.CalibratingForward = true;
+            CalibrationTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Notices/Still");
+            Host.PlayAppSound(SoundType.CalibrationPointCaptured);
+
+            await Task.Delay(4000); // Wait as bit
+            Host.PlayAppSound(SoundType.CalibrationComplete);
+
+            // End calibration
             Handler.CalibratingForward = false;
             CalibrationTextBlock.Visibility = Visibility.Collapsed;
-            Host.PlayAppSound(SoundType.CalibrationAborted);
-            return; // Sanity check, abort
+
+            CalibrateForwardButton.IsEnabled = true;
+            CalibrateDownButton.IsEnabled = true;
+            CalibrationPending = false;
+
+            // Copy and save settings
+            GlobalRotation = Handler.GlobalRotation;
+            LocalRotation = Handler.LocalRotation;
+
+            Host.PluginSettings.SetSetting("GlobalRotation", GlobalRotation);
+            Host.PluginSettings.SetSetting("LocalRotation", LocalRotation);
+
+            // Update the UI
+            UpdateSettingsInterface();
         }
-
-        // Begin calibration
-        Handler.CalibratingForward = true;
-        CalibrationTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Notices/Still");
-        Host.PlayAppSound(SoundType.CalibrationPointCaptured);
-
-        await Task.Delay(4000); // Wait as bit
-        Host.PlayAppSound(SoundType.CalibrationComplete);
-
-        // End calibration
-        Handler.CalibratingForward = false;
-        CalibrationTextBlock.Visibility = Visibility.Collapsed;
-
-        CalibrateForwardButton.IsEnabled = true;
-        CalibrateDownButton.IsEnabled = true;
-        CalibrationPending = false;
-
-        // Copy and save settings
-        GlobalRotation = Handler.GlobalRotation.ToNet();
-        LocalRotation = Handler.LocalRotation.ToNet();
-
-        Host.PluginSettings.SetSetting("GlobalRotation", GlobalRotation);
-        Host.PluginSettings.SetSetting("LocalRotation", LocalRotation);
-
-        // Update the UI
-        UpdateSettingsInterface();
+        catch (Exception ex)
+        {
+            Host?.Log(ex);
+        }
     }
 
     // "Down Calibration"
     private async void CalibrateDownButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!Handler.IsInitialized || CalibrationPending) return; // Sanity check
-
-        // Block next clicks
-        CalibrateForwardButton.IsEnabled = false;
-        CalibrateDownButton.IsEnabled = false;
-        CalibrationPending = true;
-
-        // Setup calibration UI
-        CalibrationTextBlock.Visibility = Visibility.Visible;
-        CalibrationTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Instructions/Down");
-        Host.PlayAppSound(SoundType.CalibrationStart);
-
-        // Wait as bit
-        await Task.Delay(7000);
-        if (!Handler.IsInitialized)
+        try
         {
+            if (!Handler.IsInitialized || CalibrationPending) return; // Sanity check
+
+            // Block next clicks
+            CalibrateForwardButton.IsEnabled = false;
+            CalibrateDownButton.IsEnabled = false;
+            CalibrationPending = true;
+
+            // Setup calibration UI
+            CalibrationTextBlock.Visibility = Visibility.Visible;
+            CalibrationTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Instructions/Down");
+            Host.PlayAppSound(SoundType.CalibrationStart);
+
+            // Wait as bit
+            await Task.Delay(7000);
+            if (!Handler.IsInitialized)
+            {
+                Handler.CalibratingDown = false;
+                CalibrationTextBlock.Visibility = Visibility.Collapsed;
+                Host.PlayAppSound(SoundType.CalibrationAborted);
+                return; // Sanity check, abort
+            }
+
+            // Begin calibration
+            Handler.CalibratingDown = true;
+            CalibrationTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Notices/Still");
+            Host.PlayAppSound(SoundType.CalibrationPointCaptured);
+
+            await Task.Delay(4000); // Wait as bit
+            Host.PlayAppSound(SoundType.CalibrationComplete);
+
+            // End calibration
             Handler.CalibratingDown = false;
             CalibrationTextBlock.Visibility = Visibility.Collapsed;
-            Host.PlayAppSound(SoundType.CalibrationAborted);
-            return; // Sanity check, abort
+
+            CalibrateForwardButton.IsEnabled = true;
+            CalibrateDownButton.IsEnabled = true;
+            CalibrationPending = false;
+
+            // Copy and save settings
+            GlobalRotation = Handler.GlobalRotation;
+            LocalRotation = Handler.LocalRotation;
+
+            Host.PluginSettings.SetSetting("GlobalRotation", GlobalRotation);
+            Host.PluginSettings.SetSetting("LocalRotation", LocalRotation);
+
+            // Update the UI
+            UpdateSettingsInterface();
         }
-
-        // Begin calibration
-        Handler.CalibratingDown = true;
-        CalibrationTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Notices/Still");
-        Host.PlayAppSound(SoundType.CalibrationPointCaptured);
-
-        await Task.Delay(4000); // Wait as bit
-        Host.PlayAppSound(SoundType.CalibrationComplete);
-
-        // End calibration
-        Handler.CalibratingDown = false;
-        CalibrationTextBlock.Visibility = Visibility.Collapsed;
-
-        CalibrateForwardButton.IsEnabled = true;
-        CalibrateDownButton.IsEnabled = true;
-        CalibrationPending = false;
-
-        // Copy and save settings
-        GlobalRotation = Handler.GlobalRotation.ToNet();
-        LocalRotation = Handler.LocalRotation.ToNet();
-
-        Host.PluginSettings.SetSetting("GlobalRotation", GlobalRotation);
-        Host.PluginSettings.SetSetting("LocalRotation", LocalRotation);
-
-        // Update the UI
-        UpdateSettingsInterface();
+        catch (Exception ex)
+        {
+            Host?.Log(ex);
+        }
     }
 
     private void UpdateSettingsInterface(bool force = false)
@@ -443,10 +438,10 @@ public class OwoTrack : ITrackingDevice
             Handler.CalibratingForward || Handler.CalibratingDown) return;
 
         // Nothing's changed, no need to update
-        if (!force && Handler.StatusResult == _statusBackup) return;
+        if (!force && Handler.Status == _statusBackup) return;
 
         // Update the settings UI
-        if (Handler.StatusResult == (int)HandlerStatus.ServiceSuccess)
+        if (Handler.Status == (int)Handler.ConnectionStatus.Ok)
         {
             MessageTextBlock.Visibility = Visibility.Collapsed;
 
@@ -475,7 +470,7 @@ public class OwoTrack : ITrackingDevice
         }
 
         // Cache the status
-        _statusBackup = Handler.StatusResult;
+        _statusBackup = Handler.Status;
     }
 
     private void StatusChangedEventHandler(object sender, string message)
@@ -485,27 +480,6 @@ public class OwoTrack : ITrackingDevice
 
         // Request an interface refresh
         Host?.RefreshStatusInterface();
-    }
-
-    private void LogMessageEventHandler(object sender, string message)
-    {
-        // Compute severity
-        var severity = message.Length >= 2
-            ? int.TryParse(message[1].ToString(), out var parsed) ? Math.Clamp(parsed, 0, 3) : 0
-            : 0; // Default to LogSeverity.Info
-
-        // Log a message to AME
-        Host?.Log(message, (LogSeverity)severity);
-    }
-
-    private enum HandlerStatus
-    {
-        ServiceNotStarted = 0x00010005, // Not initialized
-        ServiceSuccess = 0, // Success, everything's fine!
-        ConnectionDead = 0x00010001, // No connection
-        ErrorNoData = 0x00010002, // No data received
-        ErrorInitFailed = 0x00010003, // Init failed
-        ErrorPortsTaken = 0x00010004 // Ports taken
     }
 
     #region UI Elements
@@ -524,29 +498,6 @@ public class OwoTrack : ITrackingDevice
     private NumberBox HipHeightNumberBox { get; set; }
 
     #endregion
-}
-
-internal static class ProjectionExtensions
-{
-    public static DVector ToWin(this Vector3 vector)
-    {
-        return new DVector(vector.X, vector.Y, vector.Z);
-    }
-
-    public static DQuaternion ToWin(this Quaternion quaternion)
-    {
-        return new DQuaternion(quaternion.X, quaternion.Y, quaternion.Z, quaternion.W);
-    }
-
-    public static Vector3 ToNet(this DVector vector)
-    {
-        return new Vector3(vector.X, vector.Y, vector.Z);
-    }
-
-    public static Quaternion ToNet(this DQuaternion quaternion)
-    {
-        return new Quaternion(quaternion.X, quaternion.Y, quaternion.Z, quaternion.W);
-    }
 }
 
 internal class SetupData : ICoreSetupData

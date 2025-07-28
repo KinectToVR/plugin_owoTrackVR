@@ -26,7 +26,6 @@ void UDPDeviceQuatServer::send_heartbeat()
 	}
 }
 
-
 void UDPDeviceQuatServer::send_bytebuffer(ByteBuffer& b)
 {
 	auto buff_c = static_cast<uint8_t*>(malloc(b.size()));
