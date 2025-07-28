@@ -35,6 +35,6 @@ Both build and deployment instructions [are available here](https://github.com/K
 Install the templates by `dotnet new install Amethyst.Plugins.Templates::1.2.0`  
 and use them in Visual Studio (recommended) or straight from the DotNet CLI.  
 The project templates already contain most of the needed documentation,  
-although please feel free to check out [the official wesite](https://docs.k2vr.tech/) for more docs sometime.
+although please feel free to check out [the official website](https://docs.k2vr.tech/) for more docs sometime.
 
 The build and publishment workflow is the same as in this repo (excluding vendor deps).  
