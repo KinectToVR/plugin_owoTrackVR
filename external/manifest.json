@@ -1,7 +1,17 @@
 {
-  "version": "1.0.0.1",
-  "display_name": "owoTrackVR",
-  "download_": "plugin_owoTrackVR.zip",
-  "changelog": "Haptic emitter now checks the phone's validity.",
-  "guid": "K2VRTEAM-AME2-APII-DVCE-DVCEOWOTRACK"
+  "name": "owoTrackVR",
+  "description": "Ame2 plugin for owoTrackVR.",
+  "guid": "K2VRTEAM-AME2-APII-DVCE-DVCEOWOTRACK",
+  "type": "device",
+  "author": "K2VR Team",
+  "artifacts": [
+    {
+      "version": "2.0.0.0",
+      "contract": "2.0.0.0",
+      "platform": "windows",
+      "name": "owoTrackVR",
+      "download": "plugin_owoTrackVR.zip",
+      "changelog": "Initial release of the owoTrackVR plugin."
+    }
+  ]
 }

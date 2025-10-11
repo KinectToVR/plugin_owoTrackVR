@@ -1,4 +1,4 @@
-﻿using Amethyst.Plugins.Contract;
+﻿using Amethyst.Contract;
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;

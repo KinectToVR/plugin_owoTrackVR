@@ -5,12 +5,14 @@ using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using System.Timers;
-using Amethyst.Plugins.Contract;
-using Microsoft.UI.Text;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Markup;
-using Microsoft.UI.Xaml.Media;
+using System.Windows;
+using Amethyst.Contract;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+using FontWeight = Avalonia.Media.FontWeight;
+using RoutedEventArgs = Avalonia.Interactivity.RoutedEventArgs;
+using Thickness = Avalonia.Thickness;
 
 namespace plugin_OwoTrack;
 
@@ -18,7 +20,7 @@ namespace plugin_OwoTrack;
 [ExportMetadata("Name", "owoTrackVR")]
 [ExportMetadata("Guid", "K2VRTEAM-AME2-APII-DVCE-DVCEOWOTRACK")]
 [ExportMetadata("Publisher", "K2VR Team")]
-[ExportMetadata("Version", "1.0.0.1")]
+[ExportMetadata("Version", "2.0.0.0")]
 [ExportMetadata("Website", "https://github.com/KinectToVR/plugin_owoTrackVR")]
 [ExportMetadata("DependencyLink", "https://docs.k2vr.tech/{0}/owo/about/")]
 [ExportMetadata("CoreSetupData", typeof(SetupData))]
@@ -30,10 +32,7 @@ public class OwoTrack : ITrackingDevice
     public OwoTrack()
     {
         // Set up a new server update timer
-        var timer = new Timer
-        {
-            Interval = 25, AutoReset = true, Enabled = true
-        };
+        var timer = new Timer { Interval = 25, AutoReset = true, Enabled = true };
         timer.Elapsed += (_, _) =>
         {
             if (!PluginLoaded || !Handler.IsInitialized) return;
@@ -56,7 +55,7 @@ public class OwoTrack : ITrackingDevice
     private Quaternion LocalRotation { get; set; } = Quaternion.Identity;
 
     private bool PluginLoaded { get; set; }
-    private Page InterfaceRoot { get; set; }
+    private Control InterfaceRoot { get; set; }
 
     public bool IsSkeletonTracked => true;
     public bool IsPositionFilterBlockingEnabled => false;
@@ -69,11 +68,7 @@ public class OwoTrack : ITrackingDevice
 
     public ObservableCollection<TrackedJoint> TrackedJoints { get; } =
     [
-        new()
-        {
-            Name = nameof(TrackedJointType.JointSpineWaist),
-            Role = TrackedJointType.JointSpineWaist
-        }
+        new() { Name = nameof(TrackedJointType.JointSpineWaist), Role = TrackedJointType.JointSpineWaist }
     ];
 
     public int DeviceStatus
@@ -89,8 +84,8 @@ public class OwoTrack : ITrackingDevice
 
     public bool IsInitialized => Handler.IsInitialized;
 
-    public string DeviceStatusString => PluginLoaded
-        ? DeviceStatus switch
+    public string DeviceStatusString => PluginLoaded ?
+        DeviceStatus switch
         {
             (int)Handler.ConnectionStatus.NotStarted => Host.RequestLocalizedString("/Plugins/OWO/Statuses/NotStarted"),
             (int)Handler.ConnectionStatus.Ok => Host.RequestLocalizedString("/Plugins/OWO/Statuses/Success"),
@@ -99,10 +94,10 @@ public class OwoTrack : ITrackingDevice
             (int)Handler.ConnectionStatus.InitFailed => Host.RequestLocalizedString("/Plugins/OWO/Statuses/InitFailure"),
             (int)Handler.ConnectionStatus.PortsTaken => Host.RequestLocalizedString("/Plugins/OWO/Statuses/NoPorts"),
             _ => $"Undefined: {DeviceStatus}\nE_UNDEFINED\nSomething weird has happened, though we can't tell what."
-        }
-        : $"Undefined: {DeviceStatus}\nE_UNDEFINED\nSomething weird has happened, though we can't tell what.";
+        } :
+        $"Undefined: {DeviceStatus}\nE_UNDEFINED\nSomething weird has happened, though we can't tell what.";
 
-    public void OnLoad()
+    public Task OnLoad()
     {
         // Try to load calibration values from settings
         TrackerHeightOffset = Host.PluginSettings.GetSetting("TrackerHeightOffset", 75U);
@@ -132,106 +127,107 @@ public class OwoTrack : ITrackingDevice
         IpTextBlock = new TextBlock
         {
             Text = Handler.Addresses.Count > 1 // Format as list if found multiple IPs!
-                ? $"[ {string.Join(", ", Handler.Addresses)} ]" // Or show a placeholder
-                : Handler.Addresses.ElementAtOrDefault(0) ?? "127.0.0.1",
-            Margin = new Thickness { Left = 5, Top = 3, Right = 3, Bottom = 3 }
+                ?
+                $"[ {string.Join(", ", Handler.Addresses)} ]" // Or show a placeholder
+                :
+                Handler.Addresses.ElementAtOrDefault(0) ?? "127.0.0.1",
+            Margin = new Thickness(5, 3, 3, 3)
         };
         IpLabelTextBlock = new TextBlock
         {
-            Text = Host.RequestLocalizedString(Handler.Addresses.Count > 1
-                ? "/Plugins/OWO/Settings/Labels/LocalIP/Multiple"
-                : "/Plugins/OWO/Settings/Labels/LocalIP/One"),
-            Margin = new Thickness(3), Opacity = 0.5
+            Text = Host.RequestLocalizedString(Handler.Addresses.Count > 1 ?
+                "/Plugins/OWO/Settings/Labels/LocalIP/Multiple" :
+                "/Plugins/OWO/Settings/Labels/LocalIP/One"),
+            Margin = new Thickness(3),
+            Opacity = 0.5
         };
 
         PortTextBlock = new TextBlock
         {
             Text = Handler.Port.ToString(), // Don't allow any changes
-            Margin = new Thickness { Left = 5, Top = 3, Right = 3, Bottom = 3 }
+            Margin = new Thickness(5, 3, 3, 3)
         };
         PortLabelTextBlock = new TextBlock
         {
-            Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Labels/Port"),
-            Margin = new Thickness(3), Opacity = 0.5
+            Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Labels/Port"), Margin = new Thickness(3), Opacity = 0.5
         };
 
         HipHeightLabelTextBlock = new TextBlock
         {
-            Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Labels/HipHeight"),
-            Margin = new Thickness(3), Opacity = 0.5
+            Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Labels/HipHeight"), Margin = new Thickness(3), Opacity = 0.5
         };
 
         MessageTextBlock = new TextBlock
         {
-            Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Notices/NotStarted"),
-            Margin = new Thickness(3), Opacity = 0.5
+            Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Notices/NotStarted"), Margin = new Thickness(3), Opacity = 0.5
         };
-        CalibrationTextBlock = new TextBlock { Visibility = Visibility.Collapsed };
+        CalibrationTextBlock = new TextBlock { IsVisible = false };
 
         CalibrateForwardButton = new Button
         {
-            FontWeight = FontWeights.SemiBold,
+            FontWeight = FontWeight.SemiBold,
             Content = Host.RequestLocalizedString("/Plugins/OWO/Settings/Buttons/Calibration/Forward"),
-            Margin = new Thickness(3), IsEnabled = false, Visibility = Visibility.Collapsed
+            Margin = new Thickness(3),
+            IsEnabled = false,
+            IsVisible = false
         };
         CalibrateDownButton = new Button
         {
-            FontWeight = FontWeights.SemiBold,
+            FontWeight = FontWeight.SemiBold,
             Content = Host.RequestLocalizedString("/Plugins/OWO/Settings/Buttons/Calibration/Down"),
-            Margin = new Thickness(3), IsEnabled = false, Visibility = Visibility.Collapsed
+            Margin = new Thickness(3),
+            IsEnabled = false,
+            IsVisible = false
         };
 
-        HipHeightNumberBox = new NumberBox
-        {
-            Value = TrackerHeightOffset, Margin = new Thickness { Left = 5 },
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
+        HipHeightNumberBox = new NumericUpDown { Value = TrackerHeightOffset, Margin = new Thickness(5), Increment = 1 };
 
-        InterfaceRoot = new Page
+        InterfaceRoot = new StackPanel
         {
-            Content = new StackPanel
+            Orientation = Orientation.Vertical,
+            Children =
             {
-                Orientation = Orientation.Vertical,
-                Children =
+                new StackPanel { Orientation = Orientation.Horizontal, Children = { IpLabelTextBlock, IpTextBlock } },
+                new StackPanel
                 {
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Children = { IpLabelTextBlock, IpTextBlock }
-                    },
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Children = { PortLabelTextBlock, PortTextBlock },
-                        Margin = new Thickness { Bottom = 10 }
-                    },
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Children = { HipHeightLabelTextBlock, HipHeightNumberBox },
-                        Margin = new Thickness { Bottom = 15 }
-                    },
-                    MessageTextBlock,
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Children = { CalibrateForwardButton, CalibrateDownButton },
-                        Margin = new Thickness { Bottom = 15 }
-                    },
-                    CalibrationTextBlock
-                }
+                    Orientation = Orientation.Horizontal, Children = { PortLabelTextBlock, PortTextBlock }, Margin = new Thickness(0, 0, 0, 10)
+                },
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Children = { HipHeightLabelTextBlock, HipHeightNumberBox },
+                    Margin = new Thickness(0, 0, 0, 15)
+                },
+                MessageTextBlock,
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Children = { CalibrateForwardButton, CalibrateDownButton },
+                    Margin = new Thickness(0, 0, 0, 15)
+                },
+                CalibrationTextBlock
             }
         };
 
         // Setup signals
-        HipHeightNumberBox.ValueChanged += (sender, _) =>
+        HipHeightNumberBox.ValueChanged += (sender, e) =>
         {
-            // Try to fix the recovered height offset value
-            if (double.IsNaN(sender.Value)) sender.Value = 75;
-            if (sender.Value is < 60 or > 90)
-                sender.Value = Math.Clamp(sender.Value, 60, 90);
+            var newValue = (double)(e.NewValue ?? 0m);
 
-            TrackerHeightOffset = (uint)sender.Value; // Also save!
+            // Try to fix the recovered height offset value
+            if (double.IsNaN(newValue))
+            {
+                newValue = 75;
+                HipHeightNumberBox.Value = (decimal)newValue;
+            }
+
+            if (newValue is < 60 or > 90)
+            {
+                newValue = Math.Clamp(newValue, 60, 90);
+                HipHeightNumberBox.Value = (decimal)newValue;
+            }
+
+            TrackerHeightOffset = (uint)newValue; // Also save!
             Host.PluginSettings.SetSetting("TrackerHeightOffset", TrackerHeightOffset);
             Host.PlayAppSound(SoundType.Invoke);
         };
@@ -242,9 +238,10 @@ public class OwoTrack : ITrackingDevice
         // Mark the plugin as loaded
         PluginLoaded = true;
         UpdateSettingsInterface(true);
+        return Task.CompletedTask;
     }
 
-    public void Initialize()
+    public Task Initialize()
     {
         switch (Handler.Initialize())
         {
@@ -277,12 +274,14 @@ public class OwoTrack : ITrackingDevice
 
         // Refresh the settings interface
         UpdateSettingsInterface(true);
+        return Task.CompletedTask;
     }
 
-    public void Shutdown()
+    public Task Shutdown()
     {
         Handler.Shutdown();
         Host.Log($"Tried to shutdown the owoTrackVR device handler with status: {Handler.Status}");
+        return Task.CompletedTask;
     }
 
     public void Update()
@@ -315,7 +314,7 @@ public class OwoTrack : ITrackingDevice
     }
 
     // "Full Calibration"
-    private async void CalibrateForwardButton_Click(object sender, RoutedEventArgs e)
+    private async void CalibrateForwardButton_Click(object sender, RoutedEventArgs routedEventArgs)
     {
         try
         {
@@ -327,7 +326,7 @@ public class OwoTrack : ITrackingDevice
             CalibrationPending = true;
 
             // Setup calibration UI
-            CalibrationTextBlock.Visibility = Visibility.Visible;
+            CalibrationTextBlock.IsVisible = true;
             CalibrationTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Instructions/Forward");
             Host.PlayAppSound(SoundType.CalibrationStart);
 
@@ -336,7 +335,7 @@ public class OwoTrack : ITrackingDevice
             if (!Handler.IsInitialized)
             {
                 Handler.CalibratingForward = false;
-                CalibrationTextBlock.Visibility = Visibility.Collapsed;
+                CalibrationTextBlock.IsVisible = false;
                 Host.PlayAppSound(SoundType.CalibrationAborted);
                 return; // Sanity check, abort
             }
@@ -351,7 +350,7 @@ public class OwoTrack : ITrackingDevice
 
             // End calibration
             Handler.CalibratingForward = false;
-            CalibrationTextBlock.Visibility = Visibility.Collapsed;
+            CalibrationTextBlock.IsVisible = false;
 
             CalibrateForwardButton.IsEnabled = true;
             CalibrateDownButton.IsEnabled = true;
@@ -374,7 +373,7 @@ public class OwoTrack : ITrackingDevice
     }
 
     // "Down Calibration"
-    private async void CalibrateDownButton_Click(object sender, RoutedEventArgs e)
+    private async void CalibrateDownButton_Click(object sender, RoutedEventArgs routedEventArgs)
     {
         try
         {
@@ -386,7 +385,7 @@ public class OwoTrack : ITrackingDevice
             CalibrationPending = true;
 
             // Setup calibration UI
-            CalibrationTextBlock.Visibility = Visibility.Visible;
+            CalibrationTextBlock.IsVisible = true;
             CalibrationTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Instructions/Down");
             Host.PlayAppSound(SoundType.CalibrationStart);
 
@@ -395,7 +394,7 @@ public class OwoTrack : ITrackingDevice
             if (!Handler.IsInitialized)
             {
                 Handler.CalibratingDown = false;
-                CalibrationTextBlock.Visibility = Visibility.Collapsed;
+                CalibrationTextBlock.IsVisible = false;
                 Host.PlayAppSound(SoundType.CalibrationAborted);
                 return; // Sanity check, abort
             }
@@ -410,7 +409,7 @@ public class OwoTrack : ITrackingDevice
 
             // End calibration
             Handler.CalibratingDown = false;
-            CalibrationTextBlock.Visibility = Visibility.Collapsed;
+            CalibrationTextBlock.IsVisible = false;
 
             CalibrateForwardButton.IsEnabled = true;
             CalibrateDownButton.IsEnabled = true;
@@ -443,10 +442,10 @@ public class OwoTrack : ITrackingDevice
         // Update the settings UI
         if (Handler.Status == (int)Handler.ConnectionStatus.Ok)
         {
-            MessageTextBlock.Visibility = Visibility.Collapsed;
+            MessageTextBlock.IsVisible = false;
 
-            CalibrateForwardButton.Visibility = Visibility.Visible;
-            CalibrateDownButton.Visibility = Visibility.Visible;
+            CalibrateForwardButton.IsVisible = true;
+            CalibrateDownButton.IsVisible = true;
 
             if (!CalibrationPending)
             {
@@ -456,11 +455,11 @@ public class OwoTrack : ITrackingDevice
         }
         else
         {
-            MessageTextBlock.Visibility = Visibility.Visible;
+            MessageTextBlock.IsVisible = true;
             MessageTextBlock.Text = Host.RequestLocalizedString("/Plugins/OWO/Settings/Notices/NotConnected");
 
-            CalibrateForwardButton.Visibility = Visibility.Collapsed;
-            CalibrateDownButton.Visibility = Visibility.Collapsed;
+            CalibrateForwardButton.IsVisible = false;
+            CalibrateDownButton.IsVisible = false;
 
             if (!CalibrationPending)
             {
@@ -494,8 +493,7 @@ public class OwoTrack : ITrackingDevice
 
     private Button CalibrateForwardButton { get; set; }
     private Button CalibrateDownButton { get; set; }
-
-    private NumberBox HipHeightNumberBox { get; set; }
+    private NumericUpDown HipHeightNumberBox { get; set; }
 
     #endregion
 }
@@ -504,7 +502,7 @@ internal class SetupData : ICoreSetupData
 {
     public object PluginIcon => new PathIcon
     {
-        Data = (Geometry)XamlBindingHelper.ConvertValue(typeof(Geometry),
+        Data = Geometry.Parse(
             "M34.86,0A34.76,34.76,0,1,0,69.51,34.9,34.74,34.74,0,0,0,34.86,0ZM14.33,18.66A25.12,25.12,0,0,1,29.22,9.31c1.81-.39,3.68-.53,5-.7a28.81,28.81,0,0,1,11,2.27,1.45,1.45,0,0,1,1,1.45q.3,4.06.75,8.11c.09.79-.21.82-.79.69-.36-.08-.72-.16-1.08-.26-2-.59-1.88-.22-1.82-2.46,0-1.38-.42-1.79-1.73-1.64s-2.87.17-4.3.34c-.28,0-.59.43-.76.72a1.43,1.43,0,0,0,0,.8c.12,1.07-.07,1.62-1.41,1.84a31.91,31.91,0,0,0-16.08,7.77c-.56.48-.86.48-1.18-.2-1.22-2.62-2.5-5.21-3.67-7.85A1.86,1.86,0,0,1,14.33,18.66ZM24.91,58.73l-.09-.14h-.05v0c-2.26-.16-3.92-1.62-5.56-2.89A25.59,25.59,0,0,1,8.92,38.08a27.88,27.88,0,0,1,.87-10.71c.39.68.71,1.18,1,1.71q7,14.51,14,29a1.27,1.27,0,0,1,.05.44h0l0,0,.09,0S24.91,58.7,24.91,58.73Zm21.17-.43a29.5,29.5,0,0,1-8.72,2.43c-.18,0-.66-.57-.65-.86,0-1.86.16-3.72.28-5.58s.28-3.82.43-5.73c.1-1.25.22-2.5.34-4a4.44,4.44,0,0,1,.75.64c2.65,3.87,5.27,7.76,8,11.6C47,57.61,47,57.89,46.08,58.3Zm2.79-9.88C45.58,43.62,42.25,38.85,39,34c-.8-1.2-1.55-1.74-3-1.06a13.43,13.43,0,0,1-2.29.67c-2.05.56-2.14.68-2.27,2.76Q31,44.77,30.45,53.13a5.59,5.59,0,0,1-.29.83l-4.82-10c-1.32-2.75-2.58-5.52-4-8.23a1.65,1.65,0,0,1,.45-2.32,27.53,27.53,0,0,1,14-7.25c.83-.16,1.23.05,1.14.95,0,.32,0,.64,0,1,0,1.08.12,1.69,1.54,1.34a18.06,18.06,0,0,1,4.29-.32c.94,0,1.06-.46,1-1.2-.18-1.24.42-1.31,1.42-1,2.29.66,2.45.86,2.67,4.06.25,3.62.48,7.23.77,10.84.18,2.2.46,4.4.69,6.59Zm7.59.79-.4-.09Q54.69,33,53.31,16.94c2.24,1,5.91,7.4,6.84,11.78A26.07,26.07,0,0,1,56.46,49.21Z")
     };
 
