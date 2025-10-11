@@ -8,13 +8,13 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        dotnet-version: ['7.0.x' ]
+        dotnet-version: ['10.0.x' ]
 
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: '7.0.x'
+          dotnet-version: '10.0.x'
           
       - name: Restore and build (publish)
         run: dotnet publish --configuration Release /p:PublishProfile=plugin_owoTrackVR\Properties\PublishProfiles\FolderProfile.pubxml
